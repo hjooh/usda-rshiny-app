@@ -229,6 +229,11 @@ ui <- dashboardPage(
                              choices = c("No", "Yes"), selected = "No")
                 )
               ),
+              checkboxInput(
+                "show_forecast",
+                "Show forecasts in plot/table/download",
+                value = TRUE
+              ),
               
               hr(),
               
@@ -820,6 +825,29 @@ server <- function(input, output, session) {
   output$status_messages <- renderText({
     values$status_message
   })
+
+  # Data shown in table/download based on forecast toggle.
+  display_data <- reactive({
+    req(!is.null(values$analysis_result), !is.null(values$analysis_result$data))
+
+    data <- values$analysis_result$data
+    if (isTRUE(values$analysis_result$overlay) || isTRUE(input$show_forecast)) {
+      return(data)
+    }
+
+    if ("value" %in% names(data) && "predict_tl" %in% names(data)) {
+      data <- data %>%
+        filter(!(is.na(value) & !is.na(predict_tl)))
+    }
+
+    forecast_cols <- grep("^predict_", names(data), value = TRUE)
+    if (length(forecast_cols) > 0) {
+      data <- data %>%
+        select(-all_of(forecast_cols))
+    }
+
+    data
+  })
   
   # Display the plot (current analysis)
   output$result_plot <- renderPlotly({
@@ -839,6 +867,41 @@ server <- function(input, output, session) {
         labs(y = "Index (first series = 100)", x = "Year", colour = "Series") +
         ers_theme()
       return(ggplotly(plt, tooltip = "text"))
+    } else if (!isTRUE(input$show_forecast) &&
+               !is.null(values$analysis_result$data)) {
+      df <- display_data()
+      x_aes <- if ("date" %in% names(df) && any(!is.na(df$date))) "date" else "year_value_ex"
+
+      df <- df %>%
+        mutate(
+          hover = paste0(
+            "Commodity: ", commodity_element,
+            "<br>Time: ", .data[[x_aes]],
+            "<br>Value: ", round(value, 2),
+            if ("unit" %in% names(df)) paste0(" ", unit) else ""
+          )
+        )
+
+      plt <- ggplot(
+        df,
+        aes(
+          x = .data[[x_aes]],
+          y = value,
+          colour = commodity_element,
+          group = commodity_element,
+          text = hover
+        )
+      ) +
+        geom_line(linewidth = 1) +
+        labs(
+          title = "Historical Series (Forecast Hidden)",
+          x = if (x_aes == "date") "Date" else "Year",
+          y = if ("unit" %in% names(df)) unique(df$unit)[1] else "Value",
+          colour = "Commodity"
+        ) +
+        ers_theme()
+
+      return(ggplotly(plt, tooltip = "text"))
     } else if(!is.null(values$analysis_result$plot)) {
       return(ggplotly(values$analysis_result$plot, tooltip = c("x","y")))
     } else {
@@ -850,7 +913,7 @@ server <- function(input, output, session) {
   output$result_table <- DT::renderDataTable({
     # Read data directly from the reactive values
     if (!is.null(values$analysis_result) && !is.null(values$analysis_result$data)) {
-      DT::datatable(values$analysis_result$data, 
+      DT::datatable(display_data(), 
                     options = list(
                       scrollX = TRUE,
                       scrollY = "60vh",
@@ -1046,15 +1109,25 @@ server <- function(input, output, session) {
         commodity_clean <- gsub("[^A-Za-z0-9_]", "_", commodity)
         variable_clean <- gsub("[^A-Za-z0-9_]", "_", variable)
         
-        paste0("FTN_Analysis_", commodity_clean, "_", variable_clean, "_", timestamp, ".csv")
+        no_forecast_suffix <- if (isTRUE(input$show_forecast)) "" else "_historical_only"
+        paste0(
+          "FTN_Analysis_",
+          commodity_clean,
+          "_",
+          variable_clean,
+          no_forecast_suffix,
+          "_",
+          timestamp,
+          ".csv"
+        )
       } else {
         paste0("FTN_Analysis_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv")
       }
     },
     content = function(file) {
-      if (!is.null(values$analysis_result) && exists("Output_table", envir = .GlobalEnv)) {
-        # Get the current analysis data
-        data_to_export <- Output_table
+      if (!is.null(values$analysis_result) && !is.null(values$analysis_result$data)) {
+        # Get currently displayed analysis data (respects forecast toggle).
+        data_to_export <- display_data()
         
         # Add metadata as comments at the top (as additional columns)
         metadata <- data.frame(
@@ -1069,6 +1142,7 @@ server <- function(input, output, session) {
           Year_Range = paste(input$year_min, "to", input$year_max),
           Years_Predicted = input$years_predicted,
           Monthly_Data = input$monthly,
+          Include_Forecast = if (isTRUE(input$show_forecast)) "Yes" else "No",
           stringsAsFactors = FALSE
         )
         
