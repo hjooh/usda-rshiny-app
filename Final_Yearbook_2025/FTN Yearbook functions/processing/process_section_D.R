@@ -1,7 +1,7 @@
-#' FTN Yearbook Table Processing: Section D
-#' 
-#' This script processes Section D tables from the FTN Yearbook.
-#' 
+# FTN Yearbook Table Processing: Section D
+# 
+# This script processes Section D tables from the FTN Yearbook.
+#
 
 
 # Source utility functions

@@ -68,8 +68,8 @@ process_section_G <- function(yearbook_file, output_dir = NULL, save_individual 
       if (any(str_detect(table_data$variable, fixed(":")), na.rm = TRUE)) {
         # Split country and variable
         country_var_split <- str_split_fixed(table_data$variable, ":", 2)
-        table_data$country <- trimws(country_var_split[,1])
-        table_data$variable <- trimws(country_var_split[,2])
+        table_data$country <- trimws(country_var_split[, 1])
+        table_data$variable <- trimws(country_var_split[, 2])
       }
     }
     
@@ -79,10 +79,10 @@ process_section_G <- function(yearbook_file, output_dir = NULL, save_individual 
       
       # Extract countries from title if available
       countries_match <- str_match(metadata$title, "Comparison[s]* between ([\\w\\s,]+) and ([\\w\\s]+)")
-      if (!is.na(countries_match[1,1])) {
+      if (!is.na(countries_match[1, 1])) {
         # Extract country1 and country2 information
-        table_data$comparison_country1 <- trimws(countries_match[1,2])
-        table_data$comparison_country2 <- trimws(countries_match[1,3])
+        table_data$comparison_country1 <- trimws(countries_match[1, 2])
+        table_data$comparison_country2 <- trimws(countries_match[1, 3])
       }
     }
     
@@ -148,7 +148,7 @@ process_section_G <- function(yearbook_file, output_dir = NULL, save_individual 
   }
   
   # Return the combined data
-  return(G_append)
+  G_append
 }
 
 # If this script is run directly, process Section G tables

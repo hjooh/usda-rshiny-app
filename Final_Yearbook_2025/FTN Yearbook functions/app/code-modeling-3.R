@@ -26,6 +26,37 @@ model_time_series <- function(yearbook_sel, predict_duration = 5, monthly_ind = 
   # Ensure required packages are loaded
   required_packages <- c("dplyr", "tidyr", "ggplot2", "stringr", "broom", "lubridate", "purrr")
   suppressMessages(load_required_packages(required_packages))
+
+  # Build a compact equation string from an lm model.
+  format_lm_equation <- function(model) {
+    coefs <- stats::coef(model)
+    if (length(coefs) == 0 || all(is.na(coefs))) {
+      return(NA_character_)
+    }
+
+    intercept <- unname(coefs[1])
+    slope_terms <- coefs[-1]
+    slope_names <- names(coefs)[-1]
+
+    keep <- !is.na(slope_terms)
+    slope_terms <- slope_terms[keep]
+    slope_names <- slope_names[keep]
+
+    if (length(slope_terms) == 0) {
+      return(sprintf("value = %.4f", intercept))
+    }
+
+    rhs <- c(
+      sprintf("%.4f", intercept),
+      purrr::map2_chr(
+        slope_terms,
+        slope_names,
+        ~ sprintf("%+.4f*%s", .x, .y)
+      )
+    )
+
+    paste("value =", paste(rhs, collapse = " "))
+  }
   
   # Group data by commodity to process each one
   grouped_data <- yearbook_sel %>%
@@ -95,7 +126,11 @@ model_time_series <- function(yearbook_sel, predict_duration = 5, monthly_ind = 
         # Return a list with data and model summary
         return(list(
           data = result_data,
-          model_summary = broom::glance(trend_line)
+          model_summary = broom::glance(trend_line) %>%
+            mutate(
+              model_type = "Linear regression (annual)",
+              equation = format_lm_equation(trend_line)
+            )
         ))
         
       } else {
@@ -153,7 +188,11 @@ model_time_series <- function(yearbook_sel, predict_duration = 5, monthly_ind = 
         
         return(list(
           data = result_data,
-          model_summary = broom::glance(trend_line)
+          model_summary = broom::glance(trend_line) %>%
+            mutate(
+              model_type = "Linear regression with month dummies (monthly)",
+              equation = format_lm_equation(trend_line)
+            )
         ))
       }
       

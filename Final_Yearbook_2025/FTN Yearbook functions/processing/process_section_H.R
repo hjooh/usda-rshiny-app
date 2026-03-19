@@ -118,7 +118,7 @@ process_section_H <- function(yearbook_file, output_dir = NULL, save_individual 
   }
   
   # Return the combined data
-  return(H_append)
+  H_append
 }
 
 # If this script is run directly, process Section H tables

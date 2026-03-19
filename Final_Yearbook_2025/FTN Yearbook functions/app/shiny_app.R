@@ -872,6 +872,8 @@ server <- function(input, output, session) {
       stats_data <- values$analysis_result$model_summaries %>%
         select(
           Commodity = commodity_element,
+          Model = model_type,
+          Equation = equation,
           R_Squared = r.squared,
           Adj_R_Squared = adj.r.squared,
           P_Value = p.value,
@@ -1017,7 +1019,7 @@ server <- function(input, output, session) {
         summary_str <- summaries %>%
           mutate_if(is.numeric, round, 3) %>%
           rename(Commodity = commodity_element, R_Squared = r.squared) %>%
-          select(Commodity, R_Squared, p.value, AIC) %>%
+          select(Commodity, model_type, equation, R_Squared, p.value, AIC) %>%
           format_delim(delim = "\n")
           
         stats_text <- paste(stats_text, "\nModel Performance:\n", summary_str, sep = "")
