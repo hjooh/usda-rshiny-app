@@ -22,3 +22,4 @@ Forecasts are generated from these linear models with 80% and 95% prediction int
   - fitted equation, and
   - performance metrics (`R²`, adjusted `R²`, p-value, AIC, BIC, observations).
 
+Please note that this README is a work in progress, and doesn't fully cover the entire extent of the codebase. Thank you :)
