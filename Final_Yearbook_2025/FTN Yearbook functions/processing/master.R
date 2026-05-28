@@ -147,7 +147,7 @@ if (!interactive()) {
   paths <- get_yearbook_paths()
   
   # Default yearbook file path
-  yearbook_file <- file.path(paths$input, "Yearbook_2024_app.xlsm")
+  yearbook_file <- file.path(paths$input, "Yearbook_2024_revised.xlsm")
   
   # Check command line arguments
   args <- commandArgs(trailingOnly = TRUE)

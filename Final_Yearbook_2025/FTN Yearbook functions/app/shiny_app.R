@@ -532,6 +532,20 @@ server <- function(input, output, session) {
       
       # Trigger the next observer.
       triggers$market_segment <- triggers$market_segment + 1
+    } else if (isTRUE(input$overlay_mode) && length(input$commodity) > 1) {
+      filtered_data <- global_data %>% filter(commodity_element %in% input$commodity)
+      variable_choices <- get_unique_values(filtered_data, "variable")
+      current_variable <- isolate(input$variable)
+      selected_variable <- if (!is.null(current_variable) && current_variable %in% variable_choices) {
+        current_variable
+      } else {
+        variable_choices[1]
+      }
+
+      updateSelectInput(session, "variable",
+                        choices = variable_choices,
+                        selected = selected_variable)
+      shinyjs::enable("run_analysis")
     } else {
       # If 0 or >1 commodities are selected, stop the cascade and clear downstream inputs.
       placeholder_choice <- c("Select a single commodity" = "")
@@ -625,6 +639,20 @@ server <- function(input, output, session) {
       shinyjs::hide("year_unit")
       shinyjs::hide("value_unit")
       hideTab("resultTabs", "Statistics")
+      if (length(input$commodity) > 1) {
+        filtered_data <- global_data %>% filter(commodity_element %in% input$commodity)
+        variable_choices <- get_unique_values(filtered_data, "variable")
+        current_variable <- isolate(input$variable)
+        selected_variable <- if (!is.null(current_variable) && current_variable %in% variable_choices) {
+          current_variable
+        } else {
+          variable_choices[1]
+        }
+
+        updateSelectInput(session, "variable",
+                          choices = variable_choices,
+                          selected = selected_variable)
+      }
     } else {
       shinyjs::show("market_segment")
       shinyjs::show("geography")
@@ -647,17 +675,18 @@ server <- function(input, output, session) {
       if (length(input$commodity) == 0 || length(input$variable) == 0) {
         values$status_message <- "Error: select at least one commodity and one variable in overlay mode."; return()
       }
-      sel <- expand.grid(commodity=input$commodity, variable=input$variable, stringsAsFactors = FALSE)
-      overlay_df <- purrr::map2_dfr(sel$commodity, sel$variable, function(c,v){
-        global_data %>%
-          dplyr::filter(commodity_element==c, variable==v, geographic_extent=="United States") %>%
-          dplyr::arrange(year_value_ex) %>%
-          dplyr::mutate(series=paste(c,v,sep=" - "))
-      })
+      overlay_df <- build_overlay_data(
+        yearbook = global_data,
+        commodities = input$commodity,
+        variables = input$variable,
+        market_segment = input$market_segment,
+        geography = input$geography,
+        year_unit = input$year_unit,
+        value_unit = input$value_unit,
+        year_min = input$year_min,
+        year_max = input$year_max
+      )
       if(nrow(overlay_df)==0){values$status_message <- "No data found for selections.";return()}
-      base_series <- unique(overlay_df$series)[1]
-      base_value <- overlay_df %>% dplyr::filter(series==base_series) %>% dplyr::slice(1) %>% dplyr::pull(value)
-      overlay_df <- overlay_df %>% dplyr::mutate(index = value/base_value*100)
       values$analysis_result <- list(data=overlay_df, plot=NULL, overlay=TRUE)
       values$status_message <- paste("Overlay plot ready",Sys.time())
       return()
@@ -903,7 +932,7 @@ server <- function(input, output, session) {
 
       return(ggplotly(plt, tooltip = "text"))
     } else if(!is.null(values$analysis_result$plot)) {
-      return(ggplotly(values$analysis_result$plot, tooltip = c("x","y")))
+      return(values$analysis_result$plot)
     } else {
       return(plotly_empty() %>% layout(title="No plot available."))
     }
@@ -1037,7 +1066,25 @@ server <- function(input, output, session) {
   output$stored_result_plot <- renderPlotly({
     # Read plot directly from the reactive values for stored analysis
     if (!is.null(values$current_stored_analysis) && !is.null(values$current_stored_analysis$plot)) {
-      ggplotly(values$current_stored_analysis$plot, tooltip = c("x","y"))
+      if (!isTRUE(values$current_stored_analysis$overlay) &&
+          !is.null(values$current_stored_analysis$data) &&
+          !is.null(values$current_stored_analysis$model_summaries)) {
+        params <- values$stored_params[[paste0("slot_", values$current_stored_slot)]]
+        stored_model_results <- list(
+          data = values$current_stored_analysis$data,
+          model_summaries = values$current_stored_analysis$model_summaries,
+          monthly = identical(params$monthly, "Yes")
+        )
+
+        return(visualize_predictions(
+          stored_model_results,
+          commodity = params$commodity,
+          variable = params$variable,
+          year_unit = params$year_unit
+        ))
+      }
+
+      return(values$current_stored_analysis$plot)
     } else {
       plotly_empty() %>% 
         layout(title = "No stored analysis loaded. Please select a slot with a saved analysis.")

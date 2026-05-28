@@ -257,6 +257,26 @@ visualize_predictions <- function(model_results,
   
   plot_data <- model_results$data
   is_monthly <- model_results$monthly
+
+  if (!is.null(model_results$model_summaries) && nrow(model_results$model_summaries) > 0) {
+    equation_data <- model_results$model_summaries %>%
+      dplyr::select("commodity_element", "equation") %>%
+      dplyr::distinct()
+
+    plot_data <- plot_data %>%
+      dplyr::left_join(equation_data, by = "commodity_element")
+  } else {
+    plot_data$equation <- NA_character_
+  }
+
+  plot_data <- plot_data %>%
+    dplyr::mutate(
+      equation = dplyr::if_else(
+        is.na(.data$equation) | .data$equation == "",
+        "Equation unavailable",
+        .data$equation
+      )
+    )
   
   # --- ROBUSTNESS: Check if forecast data is available ---
   has_forecast <- "predict_tl" %in% names(plot_data) && any(!is.na(plot_data$predict_tl))
@@ -267,40 +287,60 @@ visualize_predictions <- function(model_results,
   # Build custom hover text column
   plot_data <- plot_data %>%
     dplyr::mutate(
+      x_variable_label = if (is_monthly) "Date" else "Year",
+      x_display = dplyr::case_when(
+        is_monthly ~ as.character(.data[[x_aes]]),
+        !is.na(.data$year_value) & .data$year_value != "" ~ as.character(.data$year_value),
+        .data$year_unit == "Marketing year" ~ paste0(.data$year_value_ex, "/", stringr::str_extract(.data$year_value_ex + 1, "..$")),
+        TRUE ~ as.character(.data$year_value_ex)
+      ),
       hover = paste0(
         commodity_element, "<br>",
-        "Time Period: ", .data[[x_aes]], "<br>",
-        "Historical Value: ", round(value, 2), " ", unit
+        "X Variable: ", x_variable_label, "<br>",
+        "X Variable Value: ", x_display, "<br>",
+        "Data Point Value: ", round(value, 2), " ", unit, "<br>",
+        "Equation: ", equation
       ),
       forecast_hover = if (has_forecast) {
         paste0(
           commodity_element, "<br>",
-          "Time Period: ", .data[[x_aes]], "<br>",
+          "X Variable: ", x_variable_label, "<br>",
+          "X Variable Value: ", x_display, "<br>",
           "Forecast Value: ", round(predict_tl, 2), " ", unit, "<br>",
           "80% Interval: [", round(predict_lwr_80, 2), " - ", round(predict_upr_80, 2), "]<br>",
-          "95% Interval: [", round(predict_lwr_95, 2), " - ", round(predict_upr_95, 2), "]"
+          "95% Interval: [", round(predict_lwr_95, 2), " - ", round(predict_upr_95, 2), "]<br>",
+          "Equation: ", equation
         )
       } else {
         NULL
       }
     )
+
+  historical_data <- plot_data %>%
+    dplyr::filter(!is.na(.data$value))
+
+  forecast_data <- if ("predict_tl" %in% names(plot_data)) {
+    plot_data %>% dplyr::filter(!is.na(.data$predict_tl))
+  } else {
+    plot_data[0, ]
+  }
   
   # --- ROBUST PLOTTING LOGIC ---
   # Base plot with aesthetics common to all scenarios
-  p <- ggplot(plot_data, aes(x = .data[[x_aes]], group = commodity_element, text = hover))
+  p <- ggplot(plot_data, aes(x = .data[[x_aes]], group = commodity_element))
   
   # --- INTELLIGENT PLOTTING: Only add forecast layers if data exists ---
   if (has_forecast) {
     # Add prediction interval ribbons
-    p <- p + geom_ribbon(aes(ymin = predict_lwr_95, ymax = predict_upr_95, fill = commodity_element), alpha = 0.2) +
-             geom_ribbon(aes(ymin = predict_lwr_80, ymax = predict_upr_80, fill = commodity_element), alpha = 0.3)
+    p <- p + geom_ribbon(data = forecast_data, aes(ymin = predict_lwr_95, ymax = predict_upr_95, fill = commodity_element), alpha = 0.2) +
+             geom_ribbon(data = forecast_data, aes(ymin = predict_lwr_80, ymax = predict_upr_80, fill = commodity_element), alpha = 0.3)
     
     # Add the dashed line for the forecast with its own hover text
-    p <- p + geom_line(aes(y = predict_tl, color = commodity_element, text = forecast_hover), linetype = "dashed", linewidth = 1)
+    p <- p + geom_line(data = forecast_data, aes(y = predict_tl, color = commodity_element, text = forecast_hover), linetype = "dashed", linewidth = 1)
   }
   
   # Add the line for the actual historical data
-  p <- p + geom_line(aes(y = value, color = commodity_element), linewidth = 1)
+  p <- p + geom_line(data = historical_data, aes(y = value, color = commodity_element, text = hover), linewidth = 1)
   
   # --- PLOT STYLING ---
   # Construct title and caption

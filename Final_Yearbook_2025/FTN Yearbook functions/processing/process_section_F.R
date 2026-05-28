@@ -28,7 +28,13 @@ process_section_F <- function(yearbook_file, output_dir = NULL, save_individual 
   max_tables <- 10
   
   # Lists for special case handling specific to Section F
-  value_tables <- c(1, 2, 3, 4)
+  table_variable_labels <- c(
+    "1" = "Area bearing",
+    "2" = "Gross returns",
+    "3" = "Utilized production",
+    "4" = "Price received by growers",
+    "5" = "Value of production"
+  )
   index_tables <- c(5, 6, 7, 8)
   forecasting_tables <- c(9, 10)
   
@@ -61,12 +67,8 @@ process_section_F <- function(yearbook_file, output_dir = NULL, save_individual 
     table_data <- process_worksheet(sheet_data, metadata, end_row, special_case = table_num)
     
     # Handle Section F specific processing
-    if (table_num %in% value_tables) {
-      # Mark value data specifically
-      first_var <- table_data$variable[1]
-      if (is.na(first_var) || !str_detect(first_var, "Value")) {
-        table_data$variable <- paste("Value", table_data$variable)
-      }
+    if (as.character(table_num) %in% names(table_variable_labels)) {
+      table_data$variable <- table_variable_labels[[as.character(table_num)]]
     }
     
     if (table_num %in% index_tables) {
@@ -149,22 +151,3 @@ process_section_F <- function(yearbook_file, output_dir = NULL, save_individual 
   return(F_append)
 }
 
-# If this script is run directly, process Section F tables
-if (!interactive()) {
-  # Get paths
-  paths <- get_yearbook_paths()
-  
-  # Default yearbook file path
-  yearbook_file <- file.path(paths$input, "Yearbook_2024_app.xlsm")
-  
-  # Check if file exists
-  if (!file.exists(yearbook_file)) {
-    stop(sprintf("Yearbook file not found at %s", yearbook_file))
-  }
-  
-  # Process Section F
-  F_data <- process_section_F(yearbook_file, paths$output, save_individual = TRUE)
-  
-  # Print summary
-  cat(sprintf("Processed %d rows from Section F tables\n", nrow(F_data)))
-} 

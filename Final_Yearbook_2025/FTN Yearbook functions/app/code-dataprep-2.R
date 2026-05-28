@@ -193,6 +193,86 @@ filter_yearbook_data <- function(yearbook,
   return(yearbook_sel)
 }
 
+#' Build indexed data for overlay plots
+#'
+#' @param yearbook Data frame containing normalized FTN Yearbook data
+#' @param commodities Character vector of commodities to include
+#' @param variables Character vector of variables to include
+#' @param market_segment Optional market segment filter
+#' @param geography Optional geography filter
+#' @param year_unit Optional year unit filter
+#' @param value_unit Optional value unit filter
+#' @param year_min Optional minimum year
+#' @param year_max Optional maximum year
+#' @return A filtered data frame with series and index columns
+build_overlay_data <- function(yearbook,
+                               commodities,
+                               variables,
+                               market_segment = NULL,
+                               geography = NULL,
+                               year_unit = NULL,
+                               value_unit = NULL,
+                               year_min = NULL,
+                               year_max = NULL) {
+  required_packages <- c("dplyr")
+  suppressMessages(load_required_packages(required_packages))
+
+  empty_to_null <- function(value) {
+    if (is.null(value) || length(value) == 0 || all(is.na(value)) || all(trimws(value) == "")) {
+      return(NULL)
+    }
+    value
+  }
+
+  market_segment <- empty_to_null(market_segment)
+  geography <- empty_to_null(geography)
+  year_unit <- empty_to_null(year_unit)
+  value_unit <- empty_to_null(value_unit)
+
+  selections <- expand.grid(
+    commodity = commodities,
+    variable = variables,
+    stringsAsFactors = FALSE
+  )
+
+  overlay_parts <- lapply(seq_len(nrow(selections)), function(i) {
+    selection <- selections[i, ]
+
+    tryCatch({
+      filter_yearbook_data(
+        yearbook,
+        commodity = selection$commodity,
+        market_segment = market_segment,
+        variable = selection$variable,
+        geography = geography,
+        year_unit = year_unit,
+        value_unit = value_unit,
+        interactive = FALSE
+      ) %>%
+        dplyr::filter(
+          (is.null(year_min) | .data$year_value_ex >= year_min),
+          (is.null(year_max) | .data$year_value_ex <= year_max)
+        ) %>%
+        dplyr::arrange(.data$year_value_ex) %>%
+        dplyr::mutate(series = paste(selection$commodity, selection$variable, sep = " - "))
+    }, error = function(e) {
+      data.frame()
+    })
+  })
+
+  overlay_df <- dplyr::bind_rows(overlay_parts)
+
+  if (nrow(overlay_df) == 0) {
+    return(overlay_df)
+  }
+
+  overlay_df %>%
+    dplyr::group_by(.data$series) %>%
+    dplyr::arrange(.data$year_value_ex, .by_group = TRUE) %>%
+    dplyr::mutate(index = .data$value / dplyr::first(.data$value) * 100) %>%
+    dplyr::ungroup()
+}
+
 #' Prepare time series data for analysis
 #'
 #' This function processes the filtered yearbook data for time series analysis,

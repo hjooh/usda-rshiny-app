@@ -103,22 +103,3 @@ process_section_C <- function(yearbook_file, output_dir = NULL, save_individual 
   return(C_append)
 }
 
-# If this script is run directly, process Section C tables
-if (!interactive()) {
-  # Get paths
-  paths <- get_yearbook_paths()
-  
-  # Default yearbook file path
-  yearbook_file <- file.path(paths$input, "Yearbook_2024_app.xlsm")
-  
-  # Check if file exists
-  if (!file.exists(yearbook_file)) {
-    stop(sprintf("Yearbook file not found at %s", yearbook_file))
-  }
-  
-  # Process Section C
-  C_data <- process_section_C(yearbook_file, paths$output, save_individual = TRUE)
-  
-  # Print summary
-  cat(sprintf("Processed %d rows from Section C tables\n", nrow(C_data)))
-} 
