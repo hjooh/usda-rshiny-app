@@ -37,9 +37,18 @@ read_ftn_data <- function(file_path) {
     if (!"year_unit" %in% names(df)) {
       df$year_unit <- "Calendar year"
     }
+
+    if (!"market_segment" %in% names(df)) {
+      df$market_segment <- "All"
+    }
     
     # Normalize year_unit values from processing output
     df$year_unit <- ifelse(df$year_unit == "Year", "Calendar year", df$year_unit)
+    df$market_segment <- ifelse(
+      is.na(df$market_segment) | trimws(as.character(df$market_segment)) == "",
+      "All",
+      df$market_segment
+    )
     
     # Provide a default year_start_month if missing
     if (!"year_start_month" %in% names(df)) {
