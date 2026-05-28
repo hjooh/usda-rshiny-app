@@ -60,6 +60,17 @@ process_section_G <- function(yearbook_file, output_dir = NULL, save_individual 
     table_data <- process_worksheet(sheet_data, metadata, end_row, special_case = table_num)
     
     # Handle Section G specific processing
+    if (table_num == 3) {
+      table_data$variable <- table_data$commodity_element
+      table_data$commodity_element <- "Avocados"
+      table_data$market_segment <- "Fresh"
+      table_data$unit <- ifelse(
+        table_data$variable == "Per capita availability",
+        "pounds",
+        "million pounds"
+      )
+    }
+
     if (table_num %in% international_tables) {
       # Set geographic extent for international data
       table_data$geographic_extent <- "International"
